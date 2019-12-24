@@ -1,59 +1,54 @@
 require 'optparse'
 
 options = {
-  tag: %w[img link script],
   exts: %w[html]
 }
 opt = OptionParser.new
-opt.on('-t[=VAL]', '--tag[=VAL]', Array, "default: #{options[:tag].join(',')}") do |v|
-  options[:tag] = v
-end
 opt.on('-e[=VAL]', '--ext[=VAL]', Array, "default: #{options[:exts].join(',')}") do |v|
   options[:exts] = v
 end
 opt.parse!(ARGV)
 targets = ARGV
 
-targets.each do |dir|
-  Dir[*options[:exts].map { |ext| "#{dir}/**/*.#{ext}" }].each do |path|
+targets.each do |target|
+  Dir[*options[:exts].map { |ext| "#{target}/**/*.#{ext}" }].each do |file_path|
     b = ""
-    f = File.open(path)
-    f.each_line do |line|
-      if options[:tag].include? 'link'
-        if line =~ /<link\s[^(href=)]?href=("|')[^"']("|')/
-          relative_path = line.slice(/href=("|')[^"']+("|')/)[6..-2]
-          if relative_path !~ /^\// && relative_path !~ /^http/
-            expand_path = File.expand_path(relative_path,
-                                           path.split("/")[0..-2].join("/"))
-                              .sub(/#{Dir.pwd}\/#{dir}/, '')
-            line = line.sub(relative_path, expand_path)
-          end
-        end
+    File.open(file_path).each_line do |line|
+      res = /<(".*?"|'.*?'|[^'"])*?>/.match(line)
+      unless res
+        b << line
+        next
       end
-      if options[:tag].include? 'script'
-        if line =~ /<script\s[^(src=)]?src=("|')[^"']+("|')/
-          relative_path = line.slice(/src=("|')[^"']+("|')/)[5..-2]
-          if relative_path !~ /^\// && relative_path !~ /^http/
-            expand_path = File.expand_path(relative_path,
-                                           path.split("/")[0..-2].join("/"))
-                              .sub(/#{Dir.pwd}\/#{dir}/, '')
-            line = line.sub(relative_path, expand_path)
-          end
-        end
+
+      path = /(src|SRC|href|HREF)=("[^"]*"|'[^']*')/.match(res[0])
+      unless path
+        b << line
+        next
       end
-      if options[:tag].include? 'img'
-        if line =~ /<img\s[^(src=)]?src=("|')[^"']+("|')/
-          relative_path = line.slice(/src=("|')[^"']+("|')/)[5..-2]
-          if relative_path !~ /^\// && relative_path !~ /^http/
-            expand_path = File.expand_path(relative_path,
-                                           path.split("/")[0..-2].join("/"))
-                              .sub(/#{Dir.pwd}\/#{dir}/, '')
-            line = line.sub(relative_path, expand_path)
-          end
-        end
+
+      relative_path = path[2][1..-2]
+
+      if relative_path.start_with?('javascript:') ||
+          relative_path.start_with?('mailto:') ||
+          relative_path.start_with?('tel:') ||
+          relative_path.start_with?('http') ||
+          relative_path.start_with?('/') ||
+          relative_path.start_with?('#') ||
+          relative_path.start_with?('<?=') ||
+          relative_path.start_with?('<%=') ||
+          relative_path == ''
+        b << line
+        next
       end
+
+      expand_path = File.expand_path(relative_path,
+                                     file_path.split('/')[0..-2].join('/'))
+        .sub(/#{Dir.pwd}/, '')
+      line = line.sub(/#{path[1]}=("|')#{relative_path}("|')/,
+                      "#{path[1]}=\"#{expand_path}\"")
       b << line
     end
-    File.write(path, b)
+    File.write(file_path, b)
   end
 end
+
