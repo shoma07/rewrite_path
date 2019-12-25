@@ -26,24 +26,17 @@ targets.each do |target|
         next
       end
 
-      relative_path = path[2][1..-2]
+      relative_path = path[2][1..-2].strip
 
-      if relative_path.start_with?('javascript:') ||
-          relative_path.start_with?('mailto:') ||
-          relative_path.start_with?('tel:') ||
-          relative_path.start_with?('http') ||
-          relative_path.start_with?('/') ||
-          relative_path.start_with?('#') ||
-          relative_path.start_with?('<?=') ||
-          relative_path.start_with?('<%=') ||
-          relative_path == ''
+      if relative_path =~ /^[^(javascript:)(mailto:)(tel:)(http)\/#(<\?=)(<%=)]/ ||
+         relative_path == ''
         b << line
         next
       end
 
       expand_path = File.expand_path(relative_path,
                                      file_path.split('/')[0..-2].join('/'))
-        .sub(/#{Dir.pwd}/, '')
+                        .sub(/#{Dir.pwd}/, '')
       line = line.sub(/#{path[1]}=("|')#{relative_path}("|')/,
                       "#{path[1]}=\"#{expand_path}\"")
       b << line
@@ -51,4 +44,3 @@ targets.each do |target|
     File.write(file_path, b)
   end
 end
-
